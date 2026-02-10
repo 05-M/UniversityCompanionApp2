@@ -4,20 +4,32 @@ package com.mido.universitycompanion.userinterface.screens
 
 import android.content.Intent
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material3.Card
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -25,6 +37,7 @@ import androidx.core.net.toUri
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.mido.universitycompanion.data.model.Resource
+import com.mido.universitycompanion.userinterface.viewmodel.DataState
 import com.mido.universitycompanion.userinterface.viewmodel.ResourcesViewModel
 import com.mido.universitycompanion.userinterface.viewmodel.ViewModelFactory
 
@@ -36,73 +49,107 @@ import com.mido.universitycompanion.userinterface.viewmodel.ViewModelFactory
  *                           Defaults to a ViewModel provided by [ViewModelFactory].
  * @param navController The [NavController] instance, passed for potential future navigation actions.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ResourcesScreen(
     resourcesViewModel: ResourcesViewModel = viewModel(factory = ViewModelFactory),
     navController: NavController
 ) {
-    // Collects the UI state from the ViewModel. The UI will automatically recompose
-    // when this state changes.
-    val resourcesUiState by resourcesViewModel.uiState.collectAsState()
-
-    // A smart trick to group the flat list of resources by their courseName.
-    // The result is a Map<String, List<Resource>>.
-    val groupedResources = resourcesUiState.resources.groupBy { it.courseName }
-
-    LazyColumn(modifier = Modifier.padding(8.dp)) {
-        // Iterates through each group (each course and its list of resources).
-        groupedResources.forEach { (courseName, resources) ->
-            // A sticky header could also be used here for a more advanced UI.
-            item {
-                // Displays the course name as a header for the group.
-                Text(
-                    text = courseName,
-                    style = MaterialTheme.typography.headlineSmall,
-                    modifier = Modifier.padding(16.dp)
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Course Resources") },
+                navigationIcon = {
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
                 )
-            }
-            // Displays the list of resources for the current course.
-            items(resources) { resource ->
-                ResourceCard(resource = resource)
+            )
+        }
+    ) { innerPadding ->
+        val resourcesUiState by resourcesViewModel.uiState.collectAsState()
+        when (val state = resourcesUiState.resourceState) {
+            is DataState.Loading -> {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
             }
 
+            is DataState.Success<*> -> {
+                // هنا الحل: بنمرر الليستة كلها لـ Composable جديد اسمه ResourceList
+                ResourceList(resources = state.data as List<Resource>, modifier = Modifier.padding(innerPadding))
+            }
+
+            is DataState.Error -> {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    ErrorScreen(
+                        errorMessage = state.message,
+                        onRetry = { resourcesViewModel.getResources() } // <-- هنا بننادي على Retry
+                    )
+                }
+            }
         }
     }
 }
 
-/**
- * [ResourceCard] is a Composable that displays a single resource item in a clickable [Card].
- * Clicking the card opens the resource's URL in an external web browser.
- *
- * @param resource The [Resource] object to be displayed.
- */
+// الكومبوزابل الجديد اللي هيعرض الليستة
+@Composable
+fun ResourceList(resources: List<Resource>, modifier: Modifier = Modifier) {
+    val groupedResources = resources.groupBy { it.courseName }
+
+    // هنا الـ LazyColumn هياخد modifier مختلف
+    LazyColumn(
+        modifier = modifier,
+        contentPadding = PaddingValues(8.dp) // ده بيدي padding لكل المحتوى اللي جوه الليستة
+    ) {
+        // بنعمل تكرار على كل مجموعة
+        groupedResources.forEach { (courseName, courseResources) ->
+            // بنحط Card لكل مجموعة
+            item {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp) // مسافة بين الكاردات
+                ) {
+                    Column {
+                        // عنوان الكورس جوه الكارد
+                        Text(
+                            text = courseName,
+                            style = MaterialTheme.typography.headlineSmall,
+                            modifier = Modifier.padding(16.dp)
+                        )
+                        // بنعرض المصادر بتاعت الكورس ده
+                        courseResources.forEach { resource ->
+                            ResourceCard(resource = resource)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// هنعدل الـ ResourceCard عشان يبقى شكله أنضف جوه الـ Card
 @Composable
 fun ResourceCard(resource: Resource) {
-    // [LocalContext] provides access to the Android application's context,
-    // which is required to start activities like opening a web browser.
     val context = LocalContext.current
 
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp, horizontal = 8.dp)
-            // The clickable modifier makes the entire card interactive.
-            .clickable {
-                // The magic code that opens the web browser.
-                // It creates an Intent with ACTION_VIEW to handle the URL.
-                val intent = Intent(Intent.ACTION_VIEW, resource.url.toUri())
-                context.startActivity(intent)
-            }
-    ) {
-        // ListItem is a pre-styled Composable, perfect for displaying items in a list.
-        ListItem(
-            headlineContent = { Text(resource.resourceName) }, // The main text of the list item.
-            leadingContent = { // Content displayed at the start of the list item.
-                Icon(
-                    imageVector = Icons.Filled.Link,
-                    contentDescription = "Resource link icon",
-                )
-            }
-        )
-    }
+    // مبقناش محتاجين Card هنا، هنستخدم ListItem بس
+    ListItem(
+        headlineContent = { Text(resource.resourceName) },
+        leadingContent = {
+            Icon(
+                Icons.Filled.Link,
+                contentDescription = "Resource link icon",
+            )
+        },
+        modifier = Modifier.clickable { // بنخلي الـ ListItem هو اللي clickable
+            val intent = Intent(Intent.ACTION_VIEW, resource.url.toUri())
+            context.startActivity(intent)
+        }
+    )
 }

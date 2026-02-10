@@ -3,21 +3,24 @@ package com.mido.universitycompanion.userinterface.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.CreationExtras
-import com.mido.universitycompanion.data.repository.FakeUniversityRepository
+import com.mido.universitycompanion.data.network.RetrofitClient
+import com.mido.universitycompanion.data.repository.RemoteDataSourceImpl
+import com.mido.universitycompanion.data.repository.UniversityRepositoryImpl
 
 /**
  * [ViewModelFactory] is a custom factory that implements [ViewModelProvider.Factory].
  * It is responsible for creating instances of [ScheduleViewModel] and [ResourcesViewModel],
- * ensuring they are provided with the necessary [FakeUniversityRepository] dependency.
+ * ensuring they are provided with the necessary [UniversityRepositoryImpl] dependency.
  */
 object ViewModelFactory : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T {
 
-        // 1. Retrieves the application context from the CreationExtras.
-        val context = checkNotNull(extras[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY]).applicationContext
+        // 1. إنشاء الـ RemoteDataSource (الطبقة اللي بتكلم API)
+        val remoteDataSource = RemoteDataSourceImpl(RetrofitClient.apiService)
 
-        // 2. Creates the singleton instance of the FakeUniversityRepository, passing the application context.
-        val repository = FakeUniversityRepository(context)
+        // 2. إنشاء الـ Repository (الطبقة اللي بتستخدم الـ RemoteDataSource)
+        val repository = UniversityRepositoryImpl(remoteDataSource)
+
 
         // Checks if the requested ViewModel class is assignable from ScheduleViewModel.
         if (modelClass.isAssignableFrom(ScheduleViewModel::class.java)) {

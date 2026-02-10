@@ -13,11 +13,11 @@ interface UniversityRepository {
      * Retrieves the list of all courses.
      * @return A list of [Course] objects.
      */
-    fun getCourses(): List<Course>
+    suspend fun getCourses(): List<Course>
 
     /**
      * Retrieves the list of educational resources.
      * @return A list of [Resource] objects.
      */
-    fun getResources(): List<Resource>
+    suspend fun getResources(): List<Resource>
 }

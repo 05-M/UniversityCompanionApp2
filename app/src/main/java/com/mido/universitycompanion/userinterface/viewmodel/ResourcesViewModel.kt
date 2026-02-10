@@ -1,11 +1,13 @@
 package com.mido.universitycompanion.userinterface.viewmodel
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.mido.universitycompanion.data.model.Resource
 import com.mido.universitycompanion.data.repository.UniversityRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 
 /**
  * [ResourcesUiState] represents the state of the ResourcesScreen.
@@ -14,7 +16,7 @@ import kotlinx.coroutines.flow.asStateFlow
  * @property resources The list of [Resource] objects to be displayed.
  */
 data class ResourcesUiState(
-    val resources: List<Resource> = emptyList()
+    val resourceState: DataState = DataState.Loading
 )
 
 /**
@@ -39,10 +41,17 @@ class ResourcesViewModel(private val universityRepository: UniversityRepository)
     /**
      * Fetches the list of resources from the [UniversityRepository] and updates the UI state.
      */
-    private fun getResources() {
-        // Calls the repository to get the resource data.
-        val resourceList = universityRepository.getResources()
-        // Updates the mutable state, which automatically triggers a UI recomposition.
-        _uiState.value = ResourcesUiState(resources = resourceList)
+    fun getResources() {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(resourceState = DataState.Loading)
+            try {
+                val resourceList = universityRepository.getResources()
+                _uiState.value = _uiState.value.copy(resourceState = DataState.Success(resourceList))
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    resourceState = DataState.Error("Failed to load resources: ${e.localizedMessage ?: "Unknown error"}")
+                )
+            }
+        }
     }
 }
